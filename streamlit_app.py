@@ -53,15 +53,51 @@ st.set_page_config(
     }
 )
 
-def box_to_dict(box, color=None, type=None):
-    item = {"page": box[0], "x": box[1], "y": box[2], "width": box[3], "height": box[4]}
-    if color is not None:
-        item['color'] = color
 
-    if type:
-        item['type'] = type
+def box_to_dict(annotation_raw, color=None, type=None):
+    # First try to split by semicolon if multiple annotations are provided
+    annotations = []
 
-    return item
+    if ";" in annotation_raw:
+        # Split by semicolon for multiple annotations
+        items = annotation_raw.split(";")
+    else:
+        # Try splitting by newline
+        items = annotation_raw.split("\n")
+
+    for item in items:
+        if not item.strip():
+            continue
+
+        # Split each annotation by comma to get page,x,y,width,height
+        parts = item.strip().split(",")
+        if len(parts) >= 5:
+            box = {
+                "page": int(parts[0]),
+                "x": float(parts[1]),
+                "y": float(parts[2]),
+                "width": float(parts[3]),
+                "height": float(parts[4])
+            }
+
+            if color is not None:
+                box['color'] = color
+            elif len(parts) > 5:
+                box['color'] = parts[5].replace("\"", "").replace("'", "").strip()
+            else:
+                box['color'] = "red"
+
+            if type is not None:
+                box['border'] = type
+            elif len(parts) > 6:
+                box['border'] = parts[6].replace("\"", "").replace("'", "").strip()
+            else:
+                box['border'] = "dashed"
+
+            annotations.append(box)
+
+    return annotations
+
 
 with st.sidebar:
     if st.session_state['binary']:
@@ -73,7 +109,6 @@ with st.sidebar:
     pages_vertical_spacing = st.slider(label="Pages vertical spacing", min_value=0, max_value=10, value=3)
 
     resolution_boost = st.slider(label="Resolution boost", min_value=1, max_value=10, value=1)
-
 
     st.header("Annotation Scroll")
     scroll_to_annotation = st.slider(label="Scroll to annotation", min_value=1, max_value=1000, value=1)
@@ -108,7 +143,7 @@ def new_file():
     st.session_state['binary'] = None
 
 
-def     my_custom_annotation_handler(annotation):
+def my_custom_annotation_handler(annotation):
     output_json = {
         "Index": annotation['index'],
         "Page": annotation['page']
@@ -132,12 +167,6 @@ left_column, right_column = st.columns([3, 6])
 right_column = right_column.container(border=True)
 left_column = left_column.container(border=True)
 
-def box_to_dict(box, color=None, type=None):
-    item = {"page": box[0], "x": box[1], "y": box[2], "width": box[3], "height": box[4]}
-    item['color'] = color if color is not None else "red"
-    item['type'] = type if type else "dashed"
-
-    return item
 
 def validate_annotations():
     annotations_raw = st.session_state['my_annotations'] if "my_annotations" in st.session_state.keys() else ""
@@ -147,13 +176,13 @@ def validate_annotations():
         if json_obj:
             st.session_state['annotations'] = json_obj
         else:
-            st.session_state['annotations'] = [box_to_dict(box.split(",")) for box in
-                                               annotations_raw.replace("\n", "").split(";")]
-    except:
+            st.session_state['annotations'] = box_to_dict(annotations_raw)
+    except json.JSONDecodeError:
         try:
-            st.session_state['annotations'] = [box_to_dict(box.split(",")) for box in annotations_raw.replace("\n", "").split(";")]
+            st.session_state['annotations'] = box_to_dict(annotations_raw)
         except:
-            st.dialog("Invalid annotations format. Please use the format: page,x,y,width,height;page,x,y,width,height;...")
+            st.dialog(
+                "Invalid annotations format. Please use the format: page,x,y,width,height;page,x,y,width,height;...")
 
 
 with left_column:
@@ -187,4 +216,3 @@ with right_column:
                 on_annotation_click=my_custom_annotation_handler,
                 resolution_boost=resolution_boost
             )
-
