@@ -139,7 +139,6 @@ with st.sidebar:
 def new_file():
     st.session_state['doc_id'] = None
     st.session_state['uploaded'] = True
-    st.session_state['annotations'] = []
     st.session_state['binary'] = None
 
 
